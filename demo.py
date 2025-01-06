@@ -51,18 +51,21 @@ def preprocess_image(opt, image, bbox):
         mask = (mask > 0.5).float()
     return rgb, mask
 
-def get_image(opt, image_name, mask_name):
-    image_fname = os.path.join(opt.datadir, 'images', image_name)
-    mask_fname = os.path.join(opt.datadir, 'masks', mask_name)
-    image = Image.open(image_fname).convert("RGB")
-    mask = Image.open(mask_fname).convert("L")
+def get_image(opt, image_name):
+    image_fname = os.path.join(opt.datadir, image_name)
+    image = Image.open(image_fname).convert("RGBA")
+    
+    # Split RGBA into RGB and mask
+    rgb = image.convert('RGB')
+    mask = image.split()[3]  # Get alpha channel
     mask_np = np.array(mask)
     
     #binarize
     mask_np[mask_np <= 127] = 0
     mask_np[mask_np >= 127] = 1.0
-
-    image = Image.merge("RGBA", (*image.split(), mask))
+    
+    # Reconstruct RGBA image for preprocessing
+    image = Image.merge("RGBA", (*rgb.split(), Image.fromarray(mask_np)))
     bbox = get_bbox_from_mask(mask_np, 0.5)
     rgb_input_map, mask_input_map = preprocess_image(opt, image, bbox=bbox)
     return rgb_input_map, mask_input_map
@@ -114,16 +117,14 @@ def unproj_depth(depth, intr):
 
 def prepare_data(opt):
     datadir = opt.datadir
-    image_names = [name for name in os.listdir(os.path.join(datadir, 'images')) 
+    image_names = [name for name in os.listdir(datadir) 
                    if name.endswith('.png') or name.endswith('.jpg')]
-    mask_names = [name[:-4]+'.png' for name in image_names]
     len_data = len(image_names)
     
     data_list = []
     for i in range(len_data):
         image_name = image_names[i]
-        mask_name = mask_names[i]
-        rgb_input_map, mask_input_map = get_image(opt, image_name, mask_name)
+        rgb_input_map, mask_input_map = get_image(opt, image_name)
         intr = get_intr(opt)
         
         # prepare data
