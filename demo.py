@@ -19,6 +19,7 @@ def get_1d_bounds(arr):
     return nz[0], nz[-1]
 
 def get_bbox_from_mask(mask, thr):
+    """Compute bounding box [x0, y0, x1, y1] from a binary mask."""
     masks_for_box = (mask > thr).astype(np.float32)
     assert masks_for_box.sum() > 0, "Empty mask!"
     x0, x1 = get_1d_bounds(masks_for_box.sum(axis=-2))
@@ -27,6 +28,7 @@ def get_bbox_from_mask(mask, thr):
     return x0, y0, x1, y1
 
 def square_crop(image, bbox, crop_ratio=1.0):
+    """Crop the image to a square region around the bounding box."""
     x1, y1, x2, y2 = bbox
     h, w = y2 - y1, x2 - x1
     yc, xc = (y1 + y2) / 2, (x1 + x2) / 2
@@ -66,6 +68,10 @@ def preprocess_image(opt, image, bbox):
     return rgb, mask
 
 def get_image(opt, image_name):
+    """
+    Read a single RGBA image from `opt.datadir/image_name`.
+    Extract bounding box from alpha channel, then call `preprocess_image`.
+    """
     rgba_path = os.path.join(opt.datadir, image_name)
     rgba = Image.open(rgba_path).convert("RGBA")  # Ensures 4 channels: RGBA
 
@@ -83,12 +89,14 @@ def get_image(opt, image_name):
     return rgb_input_map, mask_input_map
 
 def erode_mask(mask, iterations=5):
+    """Erode the mask by some iterations."""
     mask_np = mask.squeeze(0).cpu().numpy().astype(np.uint8)
     mask_eroded = cv2.erode(mask_np, np.ones((3,3), np.uint8), iterations=iterations)
     mask_eroded = torch.tensor(mask_eroded).unsqueeze(0).float()
     return mask_eroded
 
 def get_intr(opt):
+    """Simple intrinsic matrix generator."""
     f = 1.3875
     K = torch.tensor([
         [f * opt.W, 0,         opt.W / 2],
@@ -122,6 +130,9 @@ def unproj_depth(depth, intr):
     return seen_points
 
 def prepare_data(opt):
+    """
+    Prepare data from a single directory `opt.datadir` of RGBA images.
+    """
     datadir = opt.datadir
     # Collect RGBA images (png/jpg)
     image_names = [
